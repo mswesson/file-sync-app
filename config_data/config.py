@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = None
+TOKEN = os.getenv("TOKEN")
 DIR_PATH = os.getenv("DIR_PATH")
 CHEKING_FILES_PERIOD = None
