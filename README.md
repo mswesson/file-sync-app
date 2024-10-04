@@ -1,5 +1,50 @@
 # File sync APP
 
-The file synchronization program monitors changes to files in the specified directory on the user's computer in the background and automatically performs the necessary actions in the cloud storage.
+Это программа для синхронизации файлов на компьютере пользователя с Яндекс Диском. Она работает в фоновом режиме, отслеживает изменения файлов в указанной директории и автоматически выполняет соответствующие действия на Яндекс Диске при появлении, изменении или удалении файлов.
 
-I will add more precise information and instructions on how to launch it soon.
+## Функциональные возможности
+
+- **Автоматическая синхронизация**: Программа отслеживает изменения в указанной директории и синхронизирует их с Яндекс Диском.
+- **Поддержка операций**: Поддерживаются операции добавления, изменения и удаления файлов.
+- **Фоновый режим**: Программа работает в фоновом режиме, не требуя вмешательства пользователя.
+
+## Стек технологий
+
+- SQLite
+- SQLalchemy
+- aiohttp
+- aiofiles
+
+## Установка
+
+1. Клонируйте репозиторий:
+
+    ```bash
+    git clone https://github.com/ваш-username/название-репозитория.git
+    ```
+
+2. Создайте виртуальную среду находясь в директории проекта:
+
+    ``` bash
+    python3 -m venv venv
+    ```
+
+3. Активируйте виртуальную среду:
+
+    ``` bash
+    source venv/bin/activate
+    ```
+
+4. Установите зависимости проекта:
+
+    ``` bash
+    pip install -r requirements.txt
+    ```
+
+5. Получите Token для Yandex Disk API по адресу <https://yandex.ru/dev/disk/poligon/>
+6. Создайте файл **config.ini** и заполните его по шаблону **config.template.ini**
+7. Запустите файл main.py с помощью IDE либо терминала:
+
+    ``` bash
+    python3 main.py
+    ```

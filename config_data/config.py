@@ -25,6 +25,3 @@ except ValueError:
 if error_mesage:
     logger.error(f"ошибка: {error_mesage}")
     exit()
-
-
-

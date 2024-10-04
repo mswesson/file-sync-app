@@ -21,14 +21,16 @@ async def search_file_in_db_by_path(path: str) -> Optional[File]:
 
 async def checking_remove_files(paths: List[str]) -> List[Optional[str]]:
     """
-    Определяет какие файлы есть в БД но нету локально, 
+    Определяет какие файлы есть в БД но нету локально,
     то есть определяет какие файлы необходимо удалить в облаке и БД
     """
     async with async_session() as db:
         response = await db.execute(select(File.path).where(~File.path.in_(paths)))
         response = response.scalars().all()
-        
-    logger.debug("найдены удаленные файлы" if response else "не найдено удаленных файлов")
+
+    logger.debug(
+        "найдены удаленные файлы" if response else "не найдено удаленных файлов"
+    )
 
     return response
 
@@ -68,10 +70,10 @@ async def search_files_to_dir(path: str) -> List[Optional[tuple]]:
 async def get_edit_files_paths(pathes_and_datetime: List[tuple]) -> List[Optional[str]]:
     """
     Возвращает список путей к измененным файлам
-    
+
     Атрибуты:
         pathes_and_datetime (list): должен содержать данные формата [(path (str), edit_date (datetime))]
-    
+
     Вывод:
         list: список путей, файлов которые были измененеы
     """
@@ -92,7 +94,7 @@ async def get_edit_files_paths(pathes_and_datetime: List[tuple]) -> List[Optiona
     logger.debug(
         "найдены измененные файлы" if edit_files else "не найдено измененных файлов"
     )
-        
+
     return edit_files
 
 
@@ -101,23 +103,23 @@ async def sync_file(file_path: str):
     file_name = file_path.split("/")[-1]
     # загружаем файл в облако
     status_cloud = await save_file_to_cloud(file_path=file_path)
-    
+
     if not status_cloud:
         return
-    
+
     # ищем файл в БД
     file = await search_file_in_db_by_path(file_path)
     # получаем дату изменения файла
     cur_edit_data_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
     cur_edit_data = datetime.fromtimestamp(cur_edit_data_stamp)
 
-    if not file: # файл не найден в БД
+    if not file:  # файл не найден в БД
         file = File(path=file_path, edit_data=cur_edit_data)
         logger.info(f"загружаю файл {file_name} в облако и БД")
-    else: # файл найден в БД
+    else:  # файл найден в БД
         file.edit_data = cur_edit_data
         logger.info(f"обновляю файл {file_name} в облаке и БД")
-    
+
     # обновляю информацию о файе в БД
     async with async_session() as db:
         db.add(file)
@@ -128,7 +130,7 @@ async def delete_file_in_db(file_path: str):
     """Удаляет файл из БД"""
     file_name = file_path.split("/")[-1]
     file = await search_file_in_db_by_path(file_path)
-    
+
     if not file:
         logger.error(f"при удалении файла {file_name} из БД, он не был найден")
         return
@@ -142,10 +144,10 @@ async def delete_file_in_db(file_path: str):
 async def sync_delete_file(file_path: str):
     """Удаляет файл из облака и БД"""
     file_name = file_path.split("/")[-1]
-    
+
     db_file = await delete_file_in_db(file_path)
     cloud_file = await delete_file_in_cloud(file_path)
-    
+
     if not db_file or not cloud_file:
         return
 
