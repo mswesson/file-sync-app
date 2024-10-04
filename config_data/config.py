@@ -1,9 +1,8 @@
-import os
+from configparser import ConfigParser
 
-from dotenv import load_dotenv
+config = ConfigParser()
+config.read("config.ini")
 
-load_dotenv()
-
-TOKEN = os.getenv("TOKEN")
-DIR_PATH = os.getenv("DIR_PATH")
-CHEKING_FILES_PERIOD = None
+TOKEN = config["settings"]["token"]
+DIR_PATH = config["settings"]["dirpath"]
+TIMEOUT = int(config["settings"]["timeout"])

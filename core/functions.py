@@ -1,13 +1,14 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from sqlalchemy import select
 
 from core.http_functions import delete_file_in_cloud, save_file_to_cloud
 from database.database import async_session
 from database.models import File
+from logging_data.logger import logger
 
 
 async def search_file_in_db_by_path(path: str) -> Optional[File]:
@@ -15,67 +16,44 @@ async def search_file_in_db_by_path(path: str) -> Optional[File]:
     async with async_session() as db:
         file_elem_db = await db.execute(select(File).where(File.path == path))
         file_elem_db = file_elem_db.scalar()
-        return file_elem_db
-
-
-async def add_or_edit_file_in_db(
-    edit_data: datetime, path: str = None, file: File = None
-) -> None:
-    """
-    Добавляет или изменяет файл в ДБ
-
-    Aтрибуты:
-        edit_data (datetime): обязательный атрибут, корректное время изменения файла
-        path (str): необязательный параметр, путь к файлу. Если передан данный параметр
-            будет создан новый объект в БД
-        file (File): необязательный параметр, файл из БД. Если был передан, то в БД
-            будет изменен параметр времени изменения
-    """
-    async with async_session() as db:
-        if path and file:
-            raise AttributeError("path or file expected")
-        elif path:
-            file = File(path=path, edit_data=edit_data)
-        elif file:
-            file.edit_data = edit_data
-
-        db.add(file)
-        await db.commit()
+    return file_elem_db
 
 
 async def checking_remove_files(paths: List[str]) -> List[Optional[str]]:
-    """Выводит список путей к файлам, которых нет в переданном списке но есть в БД"""
+    """
+    Определяет какие файлы есть в БД но нету локально, 
+    то есть определяет какие файлы необходимо удалить в облаке и БД
+    """
     async with async_session() as db:
         response = await db.execute(select(File.path).where(~File.path.in_(paths)))
         response = response.scalars().all()
-        return response
+        
+    logger.debug("найдены удаленные файлы" if response else "не найдено удаленных файлов")
+
+    return response
 
 
-async def search_files_to_dir(path: str) -> Tuple[List[Optional[str]]]:
+async def search_files_to_dir(path: str) -> List[Optional[tuple]]:
     """
-    Выводит два списка. Один список отражает все пути к файлам, которые были найдены
-    в дирректории. Второй список отражает только добавленные или измененные файлы.
+    Выводит список с кортежами, которые содержат в себе путь локального файла и его дату изменения
 
     Атрибуты:
         path (str): путь к директории в которой будет происходить поиск
 
     Вывод:
-        List[Optional[str]]: все пути к найденным файлам
-        List[Optional[str]]: добавленные или измененные файлы
-
+        List[Optional[tuple]]: пути локальных файлов и их дату изменения
     """
     files_list = []
     files_by_dir = await asyncio.to_thread(os.listdir, path)
+    logger.debug(f"сканирую локальную папку {path}")
 
     for file_name in files_by_dir:
         file_path = os.path.join(path, file_name)
         if await asyncio.to_thread(os.path.isfile, file_path):  # проверка на файл
-            # добавляю путь файла в список найденных файлов
-
             # получаю время изменения файла
             cur_edit_data_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
             cur_edit_data = datetime.fromtimestamp(cur_edit_data_stamp)
-
+            # добавляю путь файла и время изменения в список files_list
             files_list.append((file_path, cur_edit_data))
 
         elif await asyncio.to_thread(
@@ -88,44 +66,73 @@ async def search_files_to_dir(path: str) -> Tuple[List[Optional[str]]]:
 
 
 async def get_edit_files_paths(pathes_and_datetime: List[tuple]) -> List[Optional[str]]:
-    """Возвращает список путей к измененным файлам"""
+    """
+    Возвращает список путей к измененным файлам
+    
+    Атрибуты:
+        pathes_and_datetime (list): должен содержать данные формата [(path (str), edit_date (datetime))]
+    
+    Вывод:
+        list: список путей, файлов которые были измененеы
+    """
     edit_files = []
 
+    # загружаю информацию о файлах из БД
     async with async_session() as db:
         all_files_in_db = await db.execute(select(File.path, File.edit_data))
         all_files_in_db = all_files_in_db.all()
 
+    # попеременно сравниваю локальные файлы с множеством файлов из БД
+    # если совпадений не найдено, то файл является измененным
     for cur_path_and_datetime in pathes_and_datetime:
         if not cur_path_and_datetime in all_files_in_db:
+            # добавляю в список путь измененного файла
             edit_files.append(cur_path_and_datetime[0])
 
+    logger.debug(
+        "найдены измененные файлы" if edit_files else "не найдено измененных файлов"
+    )
+        
     return edit_files
 
 
 async def sync_file(file_path: str):
-    """Синхронизирует файл с облаком и БД"""
-    status_save_to_cloud = await save_file_to_cloud(file_path=file_path)
-    if not status_save_to_cloud:
-        raise AttributeError(f"файл {file_path} не синхронизирован")
-
+    """Загружает измененный файл в облако и БД"""
+    file_name = file_path.split("/")[-1]
+    # загружаем файл в облако
+    status_cloud = await save_file_to_cloud(file_path=file_path)
+    
+    if not status_cloud:
+        return
+    
+    # ищем файл в БД
     file = await search_file_in_db_by_path(file_path)
+    # получаем дату изменения файла
     cur_edit_data_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
     cur_edit_data = datetime.fromtimestamp(cur_edit_data_stamp)
 
-    if not file:
+    if not file: # файл не найден в БД
         file = File(path=file_path, edit_data=cur_edit_data)
-        print(f"Добавляю новый файл в облако {file_path.split("/")[-1]}")
-    else:
+        logger.info(f"загружаю файл {file_name} в облако и БД")
+    else: # файл найден в БД
         file.edit_data = cur_edit_data
-        print(f"Обновляю файл в облаке {file_path.split("/")[-1]}")
+        logger.info(f"обновляю файл {file_name} в облаке и БД")
+    
+    # обновляю информацию о файе в БД
     async with async_session() as db:
         db.add(file)
         await db.commit()
 
 
 async def delete_file_in_db(file_path: str):
-    """Удаляет файл из БД по пути"""
+    """Удаляет файл из БД"""
+    file_name = file_path.split("/")[-1]
     file = await search_file_in_db_by_path(file_path)
+    
+    if not file:
+        logger.error(f"при удалении файла {file_name} из БД, он не был найден")
+        return
+
     async with async_session() as db:
         await db.delete(file)
         await db.commit()
@@ -133,9 +140,13 @@ async def delete_file_in_db(file_path: str):
 
 
 async def sync_delete_file(file_path: str):
-    """Удаляет файл из облака и из БД"""
-    delete_bd = await delete_file_in_db(file_path)
-    delete_cloud = await delete_file_in_cloud(file_path)
+    """Удаляет файл из облака и БД"""
+    file_name = file_path.split("/")[-1]
+    
+    db_file = await delete_file_in_db(file_path)
+    cloud_file = await delete_file_in_cloud(file_path)
+    
+    if not db_file or not cloud_file:
+        return
 
-    if not delete_bd or not delete_cloud:
-        print("ошибка синхронизации удаления файла")
+    logger.info(f"файл {file_name} удален из облака и БД")
