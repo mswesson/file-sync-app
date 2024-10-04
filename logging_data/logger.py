@@ -5,7 +5,7 @@ logger = logging.getLogger("my_logger")
 logger.setLevel(logging.DEBUG)  # Устанавливаем уровень логирования
 
 file_handler = logging.handlers.RotatingFileHandler(
-    filename="logging_data/logs/log.log",
+    filename="logging_data/log.log",
     maxBytes=5000,
     backupCount=3,
 )
