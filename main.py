@@ -20,7 +20,7 @@ async def start_app():
     logger.debug("попытка создать БД, если её не существует")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.debug(f"синхронизируемая дирректория {DIR_PATH}")
+    logger.info(f"синхронизируемая дирректория {DIR_PATH}")
 
 
 async def main():
