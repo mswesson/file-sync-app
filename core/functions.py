@@ -53,10 +53,10 @@ async def search_files_to_dir(path: str) -> List[Optional[tuple]]:
         file_path = os.path.join(path, file_name)
         if await asyncio.to_thread(os.path.isfile, file_path):  # проверка на файл
             # получаю время изменения файла
-            cur_edit_data_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
-            cur_edit_data = datetime.fromtimestamp(cur_edit_data_stamp)
+            cur_edit_date_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
+            cur_edit_date = datetime.fromtimestamp(cur_edit_date_stamp)
             # добавляю путь файла и время изменения в список files_list
-            files_list.append((file_path, cur_edit_data))
+            files_list.append((file_path, cur_edit_date))
 
         elif await asyncio.to_thread(
             os.path.isdir, file_path
@@ -81,13 +81,13 @@ async def get_edit_files_paths(pathes_and_datetime: List[tuple]) -> List[Optiona
 
     # загружаю информацию о файлах из БД
     async with async_session() as db:
-        all_files_in_db = await db.execute(select(File.path, File.edit_data))
+        all_files_in_db = await db.execute(select(File.path, File.edit_date))
         all_files_in_db = all_files_in_db.all()
 
     # попеременно сравниваю локальные файлы с множеством файлов из БД
     # если совпадений не найдено, то файл является измененным
     for cur_path_and_datetime in pathes_and_datetime:
-        if not cur_path_and_datetime in all_files_in_db:
+        if cur_path_and_datetime not in all_files_in_db:
             # добавляю в список путь измененного файла
             edit_files.append(cur_path_and_datetime[0])
 
@@ -110,14 +110,14 @@ async def sync_file(file_path: str):
     # ищем файл в БД
     file = await search_file_in_db_by_path(file_path)
     # получаем дату изменения файла
-    cur_edit_data_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
-    cur_edit_data = datetime.fromtimestamp(cur_edit_data_stamp)
+    cur_edit_date_stamp = await asyncio.to_thread(os.path.getmtime, file_path)
+    cur_edit_date = datetime.fromtimestamp(cur_edit_date_stamp)
 
     if not file:  # файл не найден в БД
-        file = File(path=file_path, edit_data=cur_edit_data)
+        file = File(path=file_path, edit_date=cur_edit_date)
         logger.info(f"загружаю файл {file_name} в облако и БД")
     else:  # файл найден в БД
-        file.edit_data = cur_edit_data
+        file.edit_date = cur_edit_date
         logger.info(f"обновляю файл {file_name} в облаке и БД")
 
     # обновляю информацию о файе в БД

@@ -1,14 +1,8 @@
 from sqlalchemy import (
-    ARRAY,
-    CheckConstraint,
     Column,
     DateTime,
-    ForeignKey,
     Integer,
-    LargeBinary,
     String,
-    UniqueConstraint,
-    select,
 )
 
 from database.database import Base
@@ -19,4 +13,4 @@ class File(Base):
 
     id = Column(Integer, primary_key=True, unique=True, nullable=False)
     path = Column(String, unique=True, nullable=False)
-    edit_data = Column(DateTime, nullable=False)
+    edit_date = Column(DateTime, nullable=False)

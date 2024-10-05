@@ -5,3 +5,4 @@ database.db
 test_app
 *.log*
 config.ini
+.ruff_cache
